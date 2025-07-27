@@ -27,7 +27,8 @@ aspect <-terrain(dem, opt= "aspect",unit= "degrees", neighbors=8)
 
 ##Load worldclim data####
 worldclim<-raster('predictors/worldclim_lokta.tif')
-worldclim_crop<-crop(worldclim,dkh_boundary_crs)
+worldclim_st<-stack(worldclim)
+worldclim_crop<-crop(worldclim_st,dkh_boundary_crs)
 worldclim_re<-resample(worldclim_crop,dem,method ="bilinear")
 
 #Load raster layers####
