@@ -26,8 +26,8 @@ slope<-terrain(dem, opt= "slope", unit= "degrees", neighbors=8)
 aspect <-terrain(dem, opt= "aspect",unit= "degrees", neighbors=8)
 
 ##Load worldclim data####
-worldclim<-raster('predictors/worldclim_lokta.tif')
-worldclim_st<-stack(worldclim)
+worldclim<-raster('MS_complete/Rasters/worldclim_lokta.tif')
+worldclim_st <- stack(worldclim)
 worldclim_crop<-crop(worldclim_st,dkh_boundary_crs)
 worldclim_re<-resample(worldclim_crop,dem,method ="bilinear")
 
@@ -76,21 +76,21 @@ Carbon_re <- resample(Carbon_crop, dem, method = "bilinear")
 
 #Load species presence/absence data ####
 
-pa_points_1 <-  read_excel(file.choose(), 1) ## Load Lokta_GPS points.xlsx ####
+pa_points_1 <-  read_excel(file.choose(), 1) ## Load Lokta_plot detail.xlsx ####
 pa_points_2 <-  read_excel(file.choose(), 2) ## Load Lokta_plot detail.xlsx ####
 pa_points_3 <-  read_excel(file.choose(), 3) ## Load Lokta_plot detail.xlsx ####
 
 #Clean and rename columns####
-pa_points_1 <- pa_points_1 [-93, - c(1,4,5,6)]%>% 
-  rename(lon = `GPS X`,lat = `GPS Y`,p_a = `Lokta (Y/N)`) %>% 
+pa_points_1 <- pa_points_1 [-93, - 1]%>% 
+  rename(lon = "X",lat = "Y", p_a = `Presence of lokta`) %>% 
   mutate(p_a = ifelse(p_a == "Yes", "1", "0"))
 
 pa_points_2 <- pa_points_2 [, - 1]%>% 
-  rename(lon = `X`,lat = `Y`,p_a = `Presence of lokta`) %>% 
+  rename(lon = "X",lat = "Y",p_a = `Presence of lokta`) %>% 
   mutate(p_a = ifelse(p_a == "Yes", "1", "0"))
 
-pa_points_3 <- pa_points_3 [, - c(1,4,5)]%>% 
-  rename(lon =  "Latitude" ,lat = "Longitude",p_a = `Presence of lokta`) %>% 
+pa_points_3 <- pa_points_3 [, - 1]%>% 
+  rename(lon =  "X" ,lat = "Y",p_a = `Presence of lokta`) %>% 
   mutate( p_a = ifelse(p_a == "Yes", "1", "0"))
 
 
