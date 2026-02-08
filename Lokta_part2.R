@@ -1,3 +1,7 @@
+
+#clear environment
+rm(list = ls())
+
 # Load required libraries ####
 library(raster)            # Read raster data
 library(sf)                # Spatial vector data handling
@@ -39,11 +43,11 @@ library(RColorBrewer)      # Color palettes
 setwd("D:/dolakha")
 
 #Load study area boundary####
-dkh_boundary<-st_read("predictors/Dolkha_buffer_100m.shp")
+dkh_boundary<-st_read("./Data/Dolakha boundary/Dolkha_buffer_100m.shp")
 dkh_boundary_crs <- st_transform(dkh_boundary, crs = wgs1984.proj )
 
 # Read the shapefile####
-db <- st_read('Data/Lokta_all_pred.shp')
+db <- st_read('./Data/Lokta_all_pred.shp')
 
 # Convert sf object to a regular data frame
 db1 <- as.data.frame(db)
@@ -75,7 +79,7 @@ print(dim(db2))
 db3 <- na.omit(db2)
 
 # Load the data with p/a points and rename####
-occ_points<- read_excel("Data/lokta_points_3.26.xlsx") ## Load lokta_points_3.26.xlsx ####
+occ_points<- read_excel("./Data/lokta_points_3.26.xlsx") ## Load lokta_points_3.26.xlsx ####
 
 occ_points <- occ_points%>% 
   rename(Elevation = srtm_dolakha1,Slope =slope,Aspect = aspect,
@@ -113,7 +117,7 @@ paste("test sample size: ", dim(test)[1])
 
 # RandomForest model ####
 ## Define the tuning grid for RF####
-CV <- trainControl(method = "cv", number = 5, savePredictions = TRUE)
+CV <- trainControl(method = "cv", number = 10, savePredictions = TRUE)
 rfGrid <-expand.grid(mtry = (1:10))
 
 rf <- train(p_a~.,data=train, 
@@ -178,16 +182,19 @@ plot(roc_rf, main = paste("AUC:", round(auc_rf, 4)))
 abline(a = 0, b = 1)
 
 # Creating an actual/observed vs predicted dataframe
-act_pred_rf <- data.frame(observed = test$p_a, predicted = factor(pred_rf))
+act_pred_rf <- data.frame(observed_rf = test$p_a, predicted_rf  = factor(pred_rf))
 
-## Calculating precision, recall, and F1 score####
-prec_rf <- precision(act_pred_rf, observed, predicted)
-rec_rf <- recall(act_pred_rf, observed, predicted)
-F1_rf <- f_meas(act_pred_rf, observed, predicted) # called f_measure
+## Calculating precision, recall, F1 score and TSS####
+prec_rf <- precision(act_pred_rf, observed_rf , predicted_rf )
+rec_rf <- recall(act_pred_rf, observed_rf , predicted_rf )
+F1_rf <- f_meas(act_pred_rf, observed_rf , predicted_rf ) 
+tss_rf <- j_index(act_pred_rf, observed_rf , predicted_rf )
 
 print(prec_rf)
 print(rec_rf)
 print(F1_rf)
+print(tss_rf)
+
 
 ##Map prediction####
 
@@ -244,9 +251,9 @@ compute_var_knn <- function(model, test_data, target_var) {
   importance <- c()
   
   for (var in colnames(test_data)[colnames(test_data) != target_var]) {
-    set.seed(42)  # Ensures the same shuffle each time
+    set.seed(42)  
     permuted_data <- test_data
-    permuted_data[[var]] <- sample(permuted_data[[var]])  # Shuffle the variable
+    permuted_data[[var]] <- sample(permuted_data[[var]])  
     
     predictions <- predict(model, permuted_data)
     permuted_accuracy <- mean(predictions == test_data[[target_var]])
@@ -260,7 +267,7 @@ compute_var_knn <- function(model, test_data, target_var) {
 ## Compute variable importance####
 var_knn <- compute_var_knn(
   model = knn,
-  test_data = test,  # Replace with your test dataset
+  test_data = test,  
   target_var = "p_a"
 )
 
@@ -306,24 +313,25 @@ confusionMatrix(pred_knn, reference = test$p_a)
 pred_knn_prob <- predict(knn, newdata = test, type = "prob")[,2]
 
 ## AUC and ROC using pROC####
-roc_knn <- roc(test$p_a, pred_knn_prob )
+roc_knn <- roc(test$p_a, pred_knn_prob)
 auc_knn <- auc(roc_knn)
 
 plot(roc_knn, main = paste("AUC:", round(auc_knn, 4)))
 abline(a = 0, b = 1)
 
 # Creating an actual/observed vs predicted dataframe
-act_pred_knn <- data.frame(observed = test$p_a, predicted = factor(pred_knn))
+act_pred_knn <- data.frame(observed_knn = test$p_a, predicted_knn = factor(pred_knn))
 
-## Calculating precision, recall, and F1 score####
-prec_knn <- precision(act_pred_knn, observed, predicted)
-rec_knn <- recall(act_pred_knn, observed, predicted)
-F1_knn <- f_meas(act_pred_knn, observed, predicted) # called f_measure 
+## Calculating precision, recall, F1 score and TSS####
+prec_knn <- precision(act_pred_knn, observed_knn, predicted_knn)
+rec_knn <- recall(act_pred_knn, observed_knn, predicted_knn)
+F1_knn <- f_meas(act_pred_knn, observed_knn, predicted_knn) 
+tss_knn <- j_index(act_pred_knn, observed_knn, predicted_knn)
 
 print(prec_knn)
 print(rec_knn)
 print(F1_knn)
-
+print(tss_knn)
 
 ##Map prediction####
 
@@ -360,18 +368,18 @@ tune_grid_ann <- expand.grid(size = c(1, 3, 5), decay = c(0, 0.1, 0.5))
 grids <-  expand.grid(size = seq(from = 1, to = 7, by = 2),
                       decay = seq(from = 0, to = 0.1,by = 0.01))
 ctrl <- trainControl(method = "repeatedcv",
-                     number = 5, # 5 folds
-                     repeats = 3, # 3 repeats
-                     search = "grid") # grid search
+                     number = 10, 
+                     repeats = 3, 
+                     search = "grid") 
 
 set.seed(831)
-ann <- train(form = p_a~., # use all other variables to predict target
-                data = train, # training data
-                preProcess = "range", # apply min-max normalization
-                method = "nnet", # use nnet()
+ann <- train(form = p_a~., 
+                data = train, 
+                preProcess = "range", 
+                method = "nnet", 
                 trControl = ctrl, 
-                tuneGrid = grids, # search over the created grid
-                trace = FALSE) # suppress output
+                tuneGrid = grids, 
+                trace = FALSE) 
 
 #save(ann, file = 'Model/ann.RData') #to save the model
 #load(file = 'Model/ann.RData') # to load the model
@@ -413,12 +421,12 @@ plot_var_ann <-ggplot(top10_ann, aes(x = Importance, y = reorder(Variable, Impor
 
 plot(plot_var_ann)
 
-plotnet(mod_in = ann$finalModel, # nnet object
-        pos_col = "darkgreen", # positive weights are shown in green
-        neg_col = "darkred", # negative weights are shown in red
-        bias = FALSE, # do not plot bias
-        circle_cex = 4, # reduce circle size (default is 5)
-        cex_val = 0.6) # reduce text label size (default is 1)
+plotnet(mod_in = ann$finalModel,
+        pos_col = "darkgreen", 
+        neg_col = "darkred", 
+        bias = FALSE, 
+        circle_cex = 4, 
+        cex_val = 0.6) 
 
 ## Accuracy assessment w.r.t test data point####
 pred_ann <- predict(ann, test)
@@ -426,8 +434,8 @@ confusionMatrix(pred_ann, reference = test$p_a)
 
 # Predict probabilities for the test dataset
 pred_ann_prob <- predict(ann, newdata = test, type = "prob")[,2]
-confusionMatrix(data = pred_ann_prob, # predictions
-                reference = train$p_a, # actual
+confusionMatrix(data = pred_ann_prob,
+                reference = train$p_a, 
                 positive = "1",
                 mode = "everything")
 
@@ -439,16 +447,18 @@ plot(roc_ann, main = paste("AUC:", round(auc_ann, 4)))
 abline(a = 0, b = 1)
 
 # Creating an actual/observed vs predicted dataframe
-act_pred_ann <- data.frame(observed = test$p_a, predicted = factor(pred_ann))
+act_pred_ann <- data.frame(observed_ann = test$p_a, predicted_ann = factor(pred_ann))
 
 # Calculating precision, recall, and F1 score
-prec_ann <- precision(act_pred_ann, observed, predicted)
-rec_ann <- recall(act_pred_ann, observed, predicted)
-F1_ann <- f_meas(act_pred_ann, observed, predicted) # called f_measure
+prec_ann <- precision(act_pred_ann, observed_ann, predicted_ann)
+rec_ann <- recall(act_pred_ann, observed_ann, predicted_ann)
+F1_ann <- f_meas(act_pred_ann, observed_ann, predicted_ann) 
+tss_ann <-  j_index(act_pred_ann, observed_ann, predicted_ann)
 
 print(prec_ann)
 print(rec_ann)
 print(F1_ann)
+print(tss_ann)
 
 ##Map prediction####
 pred_data_ann = cbind(db3[c('x','y')], predict(ann, db3, type = "prob"))
@@ -478,7 +488,7 @@ jpeg("Output/lokta_ann.jpg", width = 800, height = 500)
 
 #XGB model####
 ## Define the tuning grid for XGB####
-grid_default <- expand.grid(nrounds = 100,max_depth = 6,eta = 0.3,gamma = 0,
+grid_default <- expand.grid(nrounds = 100,max_depth = c(4,6,8),eta = c(0.1,0.3),gamma = 0,
                             colsample_bytree = 1,min_child_weight = 1,subsample = 1)
 
 train_control <- trainControl(method = "cv", number = 10)
@@ -496,6 +506,7 @@ xgb
 plot(xgb)
 
 varImp_xgb <- varImp(xgb, scale = TRUE)
+
 varImp_xgb
 #windows()
 plot(varImp_xgb)
@@ -531,10 +542,11 @@ plot(plot_var_xgb)
 
 ## Accuracy assessment w.r.t test data point####
 pred_xgb<- predict(xgb, test)
-confusionMatrix(predict_xgb, reference = test$p_a)
+confusionMatrix(pred_xgb, reference = test$p_a)
 
 # Predict probabilities for the test dataset
 pred_xgb_prob <- predict(xgb, newdata = test, type = "prob")[,2]
+
 
 ## AUC and ROC using pROC####
 roc_xgb <- roc(test$p_a, pred_xgb_prob )
@@ -544,17 +556,18 @@ plot(roc_xgb, main = paste("AUC:", round(auc_xgb, 4)))
 abline(a = 0, b = 1)
 
 # Creating an actual/observed vs predicted dataframe
-act_pred_xgb <- data.frame(observed = test$p_a, predicted = factor(pred_xgb))
+act_pred_xgb <- data.frame(observed_xgb = test$p_a, predicted_xgb = factor(pred_xgb))
 
 # Calculating precision, recall, and F1 score
-prec_xgb <- precision(act_pred_xgb, observed, predicted)
-rec_xgb <- recall(act_pred_xgb, observed, predicted)
-F1_xgb <- f_meas(act_pred_xgb, observed, predicted) # called f_measure
+prec_xgb <- precision(act_pred_xgb, observed_xgb, predicted_xgb)
+rec_xgb <- recall(act_pred_xgb, observed_xgb, predicted_xgb)
+F1_xgb <- f_meas(act_pred_xgb, observed_xgb, predicted_xgb)
+tss_xgb <- j_index(act_pred_xgb, observed_xgb, predicted_xgb)
 
 print(prec_xgb)
 print(rec_xgb)
 print(F1_xgb)
-
+print(tss_xgb)
 
 ##Map prediction####
 pred_data_xgb = cbind(db3[c('x','y')], predict(xgb, db3, type = "prob"))
@@ -593,7 +606,7 @@ roc_data_ann <- data.frame(fpr = roc_ann$specificities, tpr = roc_ann$sensitivit
 roc_data_xgb <- data.frame(fpr = roc_xgb$specificities, tpr = roc_xgb$sensitivities, model = "XGB")
 
 # Combine all ROC data frames into one
-roc_combined <- rbind(roc_data_rf, roc_data_knn, roc_data_ann, roc_data_xgb)#, roc_data_lr)
+roc_combined <- rbind(roc_data_rf, roc_data_knn, roc_data_ann, roc_data_xgb)
 
 # Plot ROC curves with ggplot2
 ggplot(roc_combined, aes(x = 1 - fpr, y = tpr, color = model)) +
