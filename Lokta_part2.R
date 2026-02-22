@@ -1,5 +1,5 @@
 
-#clear environment
+# Clear environment
 rm(list = ls())
 
 # Load required libraries ####
@@ -39,10 +39,10 @@ library(rJava)             # Java integration
 library(XML)               # XML parsing
 library(RColorBrewer)      # Color palettes
 
-#Set working directory####
+# Set working directory####
 setwd("D:/dolakha")
 
-#Load study area boundary####
+# Load study area boundary####
 dkh_boundary<-st_read("./Data/Dolakha boundary/Dolkha_buffer_100m.shp")
 dkh_boundary_crs <- st_transform(dkh_boundary, crs = wgs1984.proj )
 
@@ -196,7 +196,7 @@ print(F1_rf)
 print(tss_rf)
 
 
-##Map prediction####
+## Map prediction####
 
 pred_data_rf = cbind(db3 [c('x','y')], predict(rf, db3 , type = "prob"))
 names(pred_data_rf) = c("x", "y", "no", "yes")
@@ -210,7 +210,7 @@ plot(rast_rf)
 
 writeRaster(rast_rf, 'Output/rast_rf_3.26.tif', overwrite= TRUE)
 
-##Create color palette and plot####
+## Create color palette and plot####
 palfunc <- function (n, alpha = 1, begin = 0, end = 1, direction = 1) 
 {
   colors <- rev(brewer.pal(11, "RdYlGn"))
@@ -223,6 +223,24 @@ spplot(rast_rf, main="Daphne bholua Distribution Mapping using RF",col.regions=p
 jpeg("Output/Lokta_RF_11.9.jpg", width = 800, height = 500)
 
 dev.off()
+
+## Uncertainty map prediction####
+
+rf_model_raw <- rf$finalModel
+pred_std_rf <- apply(predict(rf_model_raw, db3, predict.all=TRUE)$individual, 1, 
+                     function(x) sd(as.numeric(x)))
+
+uncertainty_df_rf <- cbind(db3[c('x','y')], uncertainty = pred_std_rf)
+
+# Convert to raster
+rast_rf_uncert <- rasterFromXYZ(uncertainty_df_rf[, c("x", "y", "uncertainty")])
+proj4string(rast_rf_uncert) <- wgs1984.proj
+
+# Plot the uncertainty map
+plot(rast_rf_uncert, main="Prediction Uncertainty (SD of Trees)")
+
+# Save the uncertainty raster
+writeRaster(rast_rf_uncert, '/Output/uncertainty_rf.tif', overwrite= TRUE)
 
 
 
@@ -305,7 +323,7 @@ plot(plot_var_knn)
 
 # varImp_knn <- varImp(knn, scale = TRUE)
 
-##Accuracy assessment w.r.t. test data point ####
+## Accuracy assessment w.r.t. test data point ####
 pred_knn <- predict(knn, test)
 confusionMatrix(pred_knn, reference = test$p_a)
 
@@ -333,7 +351,7 @@ print(rec_knn)
 print(F1_knn)
 print(tss_knn)
 
-##Map prediction####
+## Map prediction####
 
 pred_data_knn = cbind(db3[c('x','y')], predict(knn,db3, type='prob'))
 names(pred_data_knn) = c("x", "y", "no", "yes")
@@ -345,7 +363,7 @@ proj4string(rast_knn)=wgs1984.proj
 plot(rast_knn)
 writeRaster(rast_knn, 'Output/rast_knn_3.26.tif', overwrite= TRUE)
 
-##Create color palette and plot####
+## Create color palette and plot####
 palfunc <- function (n, alpha = 1, begin = 0, end = 1, direction = 1) 
 {
   colors <- rev(brewer.pal(11, "RdYlGn"))
@@ -356,6 +374,25 @@ palfunc <- function (n, alpha = 1, begin = 0, end = 1, direction = 1)
 spplot(rast_knn , main="Daphne bholua distribution mapping using KNN",col.regions=palfunc)
 
 jpeg("Output/lokta_knn.jpg", width = 800, height = 500)
+
+
+## Uncertainty map prediction####
+
+uncertainty_knn_df <- pred_data_knn %>%
+  mutate(uncertainty = 1 - abs(2 * P - 1)) %>%
+  select(x, y, uncertainty)
+
+# Convert to raster
+rast_knn_uncert <- rasterFromXYZ(uncertainty_knn_df)
+proj4string(rast_knn_uncert) <- wgs1984.proj
+
+# Plot the uncertainty map
+plot(rast_knn_uncert, main="kNN prediction uncertainty (Neighbor disagreement)")
+
+# Save the uncertainty raster
+writeRaster(rast_knn_uncert, 'Output/uncertainty_knn.tif', overwrite= TRUE)
+
+
 
 
 # ANN  ####
@@ -460,7 +497,7 @@ print(rec_ann)
 print(F1_ann)
 print(tss_ann)
 
-##Map prediction####
+## Map prediction####
 pred_data_ann = cbind(db3[c('x','y')], predict(ann, db3, type = "prob"))
 names(pred_data_ann) = c("x", "y", "no", "yes")
 
@@ -472,7 +509,7 @@ proj4string(rast_ann)=wgs1984.proj
 plot(rast_ann)
 writeRaster(rast_ann, 'Output/ann_3.26.tif')
 
-##Create color palette and plot####
+## Create color palette and plot####
 palfunc <- function (n, alpha = 1, begin = 0, end = 1, direction = 1) 
 {
   colors <- rev(brewer.pal(11, "RdYlGn"))
@@ -484,9 +521,25 @@ spplot(rast_ann , main="Daphne bholua distribution mapping using ANN",col.region
 
 jpeg("Output/lokta_ann.jpg", width = 800, height = 500)
 
+## Uncertainty map prediction####
+
+uncertainty_ann_df <- pred_data_ann %>%
+  mutate(uncertainty = 1 - abs(2 * P - 1)) %>%
+  dplyr::select(x, y, uncertainty)
+
+# Convert to raster
+rast_ann_uncert <- rasterFromXYZ(uncertainty_ann_df)
+proj4string(rast_ann_uncert) <- wgs1984.proj
+
+# Plot the uncertainty map
+plot(rast_ann_uncert, main="ANN prediction uncertainty (Decision boundary)")
+
+# Save the uncertainty raster
+writeRaster(rast_ann_uncert, 'Output/uncertainty_ann.tif', overwrite=TRUE)
 
 
-#XGB model####
+
+# XGB model####
 ## Define the tuning grid for XGB####
 grid_default <- expand.grid(nrounds = 100,max_depth = c(4,6,8),eta = c(0.1,0.3),gamma = 0,
                             colsample_bytree = 1,min_child_weight = 1,subsample = 1)
@@ -569,7 +622,7 @@ print(rec_xgb)
 print(F1_xgb)
 print(tss_xgb)
 
-##Map prediction####
+## Map prediction####
 pred_data_xgb = cbind(db3[c('x','y')], predict(xgb, db3, type = "prob"))
 names(pred_data_xgb) = c("x", "y", "no", "yes")
 
@@ -580,7 +633,7 @@ proj4string(rast_xgb)=wgs1984.proj
 plot(rast_xgb)
 writeRaster(rast_xgb, 'Output/xgb_3.26.tif')
 
-##Create color palette and plot####
+## Create color palette and plot####
 palfunc <- function (n, alpha = 1, begin = 0, end = 1, direction = 1) 
 {
   colors <- rev(brewer.pal(11, "RdYlGn"))
@@ -591,14 +644,33 @@ spplot(rast_xgb, main="Daphne bholua distribution mapping using XGB", col.region
 
 jpeg("Output/lokta_xgb.jpg", width = 800, height = 500)
 
+## Uncertainty map prediction####
 
-#VarImp plot merged####
+names(pred_data_xgb) <- c("x", "y", "A", "P")
+
+uncertainty_xgb_df <- pred_data_xgb %>%
+  mutate(uncertainty = 1 - abs(2 * P - 1)) %>%
+  dplyr::select(x, y, uncertainty)
+
+# Convert to raster
+rast_xgb_uncert <- rasterFromXYZ(uncertainty_xgb_df)
+proj4string(rast_xgb_uncert) <- wgs1984.proj
+
+# Plot the uncertainty map
+plot(rast_xgb_uncert, main="XGBoost prediction uncertainty (Dolakha)")
+
+# Save the uncertainty raster
+writeRaster(rast_xgb_uncert, 'Output/uncertainty_xgb.tif', overwrite=TRUE)
+
+
+
+# VarImp plot merged####
 library(gridExtra)
 # Arrange in 2x2 grid
 grid.arrange(plot_var_rf, plot_var_knn, plot_var_ann,plot_var_xgb, ncol=2, nrow=2)
 plot(plot_var_xgb)
 
-#ROC combined####
+# ROC combined####
 # Create a data frame for each ROC curve
 roc_data_rf <- data.frame(fpr = roc_rf$specificities, tpr = roc_rf$sensitivities, model = "RF")
 roc_data_knn <- data.frame(fpr = roc_knn$specificities, tpr = roc_knn$sensitivities, model = "KNN")
